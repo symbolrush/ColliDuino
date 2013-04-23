@@ -1,0 +1,151 @@
+// DemoPiece to show possibilities of ColliDuino
+// Thie piece interacts with two Arduino Uno Boards to get data from a Nunchuck and 4 LightSensors.
+
+// First the SynthDef
+(
+  SynthDef(\sinegrain, {arg pan=1, freq, amp; var grain; 
+	grain= SinOsc.ar(freq, 0, amp)*(XLine.kr(1.001,0.001,4,doneAction:2)-0.001);
+	Out.ar(0,Pan2.ar(grain, pan))}).add; 
+
+	b = Buffer.alloc(s, 44100 * 6.0, 2);
+
+	SynthDef(\bass2, { arg out=0, freq=40, amp=0.6, pan=0, gate=1;
+			var z;
+			z = LPF.ar(Mix.ar([SinOsc.ar(freq*[0.5,1,2],0.1,amp*[0.4,1,0.2]), Saw.ar(freq,amp)]),
+				XLine.kr(1000, 1000,20)) 
+			* EnvGen.kr(Env.new([0,1,0],[0.01,0.12],\lin,1), gate, doneAction:2); 
+			Out.ar(out, Pan2.ar(z, pan));
+		}).add; 
+
+
+)
+
+// Glöckchenzeugs, LightSensors; Bass, Nunchuk
+(
+	var offset = 0;
+	var ampoffset = 0.05;
+	var waittime = 0.3;
+	var synthi = \sinegrain; //choose sinegrain or sawgrain
+	var state = 0;
+	var wostock;
+	var amp;
+	var pan;
+	var freq = 440;
+	var on = 0;
+	var brother;
+	var bass, bassamp, bassfreq;
+	
+	{
+	bass = Synth.new(\bass2,[\freq, 40.midicps,\out,0,\amp,0,\dur,1,]);
+	bass.play;
+
+	// Setting up Communication with Arduino
+	p = ArduinoSMS("/dev/tty.usbmodem1d11", 115200);
+	q = ArduinoSMS("/dev/tty.usbmodem1a21", 115200);
+	// Schnallt euch an!
+	while{state==0}{										// Light Sensor
+		q.action = { |... msg| 
+		m=[msg[0],msg[1]]; //Parse message stream. use m[0] as identifier and m[1] as value
+		case
+			{m[0]=="OL:"} {
+				freq=m[1]+20;
+				"OL: ".post;
+				freq.postln;
+				}
+			
+			{m[0]=="OR:"} {
+				waittime=(m[1]/10);
+				if(waittime > 0.5){waittime=0.5};
+				if(waittime < 0.05){waittime=0.05};
+				"OR: ".post;
+				waittime.postln;
+				}	
+			};
+		
+		// Nunchuk
+		p.action = { |... msg| 
+		m=[msg[0],msg[1]]; //Parse message stream. use m[0] as identifier and m[1] as value
+		case
+			{m[0]=="cbut"} {
+				case
+					{m[1]==1} {on=1;}
+					{m[1]==0} {on=0;}
+				}
+			{m[0]=="zbut"} {
+				state=1;
+				}
+			{m[0]=="accy"} {
+				bass.set(\amp, (m[1]/100)*on);
+				}	
+			{m[0]=="accx"} {
+				bass.set(\freq, ((m[1]/20).roundUp(2)+24).midicps);
+				}
+			};
+		
+		waittime.wait;
+		
+		
+	wostock = Pbind(
+	\dur,waittime,
+	\midinote, Pseq([freq],1)+Prand([12,24],1), 
+     \amp, (Pgauss(0.0, 0.2, 1)+ampoffset),
+     \pan, 0,
+     \instrument, synthi
+	).play;
+ 
+		
+	};
+	while{state==1}{
+		0.5.wait;
+		"stop.".speak;
+		p.close;
+		q.close;
+		c.free;
+		b.free;
+		state=2;
+		}
+
+}.fork(AppClock)
+)
+
+// Live Coding
+(
+SynthDef(\LMFAP, {|combdecay=1, allpassdecay=0.5, wet=0.1, bufnum, rate=1, end=264600|
+	var in, signal;
+	in = AudioIn.ar([1,2]);
+	z = DelayN.ar(in, 0.1, 0.51);
+	y = Mix.ar(Array.fill(3,{ CombL.ar(z, 0.05, rrand(0.03, 0.05), combdecay) }));
+	6.do({ y = AllpassN.ar(y, 0.030, rrand(0.01, 0.03), allpassdecay) });
+	BufWr.ar(in+(y*wet), bufnum, Phasor.ar(0, 1, 0, end));
+	signal = BufRd.ar(2, bufnum, Phasor.ar(0, BufRateScale.kr(0)*rate, 0, end));
+	y = Mix.ar(Array.fill(7,{ CombL.ar(signal, 0.05, rrand(0.03, 0.05), combdecay) }));
+	6.do({ y = AllpassN.ar(y, 0.050, rrand(0.03, 0.05), allpassdecay) });
+	Out.ar(0, signal+(y*wet));
+}).add;
+)
+
+// wait a bit
+c = Synth(\LMFAP, [\bufnum, b.bufnum, \rate, -1]);
+
+
+c.set(\combdecay, 3)
+c.set(\combdecay, 6)
+
+
+c.set(\allpassdecay, 0.4)
+
+c.set(\rate, -0.8)
+c.set(\rate, 4) //   später 10,20,30
+c.set(\rate, -2)
+
+c.set(\wet, 0.6) // more reverb
+c.set(\wet, 1) // more reverb
+c.set(\wet, 0) // no reverb
+
+c.set(\end, 44100*0.01) // 1 sec loop
+
+c.set(\end, 44100*1) // 1 sec loop
+c.set(\end, 44100*6) // 6 sec loop
+
+
+

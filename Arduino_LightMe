@@ -1,0 +1,60 @@
+/*
+ * ColliDuino_Arduino_LightSensor_v2 
+ * Reads in 4 LDR's and sends their values to the SerialPort.
+ * 
+ * 2013 Adrian Schmid
+ *
+ */
+
+int OR = 1;        // value read LDR0
+int OL = 1;        // value read LDR1
+int UR = 1;        // value read LDR2
+int UL = 1;        // value read LDR3
+int OR_old = 1;
+int OL_old = 1;
+int UR_old = 1;
+int UL_old = 1;
+
+void setup() {
+  Serial.begin(115200); 
+  Serial.println("ColliDuino ready!");
+  delay(1000);
+}
+
+void loop() {
+  OR = (100000/analogRead(A0))-125;
+  if(OR < 1){OR =1;}
+  if(OR > 100){OR =100;}
+  OL = (100000/analogRead(A1))-125;
+  if(OL < 1){OL =1;}
+  if(OL > 100){OL =100;}
+  UR = (100000/analogRead(A2))-125;
+  if(UR < 1){UR =1;}
+  if(UR > 100){UR =100;}
+  UL = (100000/analogRead(A3))-125;
+  if(UL < 1){UL =1;}
+  if(UL > 100){UL =100;}
+  
+  
+  if(OR != OR_old){
+    Serial.print("OR: ");
+    Serial.println(OR);
+    OR_old = OR;  
+  }
+  if(OL != OL_old){
+    Serial.print("OL: ");
+    Serial.println(OL);
+    OL_old = OL;  
+  }
+  if(UR != UR_old){
+    Serial.print("UR: ");
+    Serial.println(UR);
+    UR_old = UR;  
+  }
+  if(UL != UL_old){
+    Serial.print("UL: ");
+    Serial.println(UL);
+    UL_old = UL;  
+  }
+  delay(5);
+}
